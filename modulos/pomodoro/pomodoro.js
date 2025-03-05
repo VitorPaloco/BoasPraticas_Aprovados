@@ -1,11 +1,12 @@
 // IMPORTANDO A SIDEBAR DA GLOBAL
+
 document.addEventListener("DOMContentLoaded", function () {
   fetch("/global.html")
-      .then(response => response.text())
-      .then(html => {
-          document.getElementById("sidebar-container").innerHTML = html;
-      })
-      .catch(error => console.error("Erro ao carregar a sidebar:", error));
+    .then(response => response.text())
+    .then(html => {
+      document.getElementById("sidebar-container").innerHTML = html;
+    })
+    .catch(error => console.error("Erro ao carregar a sidebar:", error));
 });
 
 const circleElement = document.querySelector(".circle");
@@ -17,8 +18,8 @@ const resetButton = document.querySelector(".reset-button");
 const notificationSound = document.querySelector("#notification");
 const timeContainerElement = document.querySelector(".time-container");
 
-let isRunning,
-  isBreakTime,
+let isRunning = false,
+  isBreakTime = false,
   workTime,
   breakTime,
   longBreakTime,
@@ -26,53 +27,51 @@ let isRunning,
   currentTurn,
   totalTime,
   timeRemaining,
-  timer;
+  timerInterval;
 
-controlButton.addEventListener("click", toggleStartPause);
-resetButton.addEventListener("click", reset);
+controlButton.addEventListener("click", toggleTimerState);
+resetButton.addEventListener("click", resetTimer);
 
 Notification.requestPermission();
 
-function startValues() {
+function initializeTimerSettings() {
   let workTimeElement = document.querySelector("#work-time-options");
   let totalTurnsElement = document.querySelector("#total-turns-options");
 
   isRunning = false;
   isBreakTime = false;
   workTime = workTimeElement.options[workTimeElement.selectedIndex].value * 60;
-  breakTime =
-    (workTimeElement.options[workTimeElement.selectedIndex].value / 5) * 60;
-  longBreakTime =
-    (workTimeElement.options[workTimeElement.selectedIndex].value - 10) * 60;
+  breakTime = (workTimeElement.options[workTimeElement.selectedIndex].value / 5) * 60;
+  longBreakTime = (workTimeElement.options[workTimeElement.selectedIndex].value - 10) * 60;
   totalTurns = totalTurnsElement.options[totalTurnsElement.selectedIndex].value;
   currentTurn = 1;
   totalTime = workTime;
   timeRemaining = totalTime;
-  timer = null;
+  timerInterval = null;
 }
 
-function toggleStartPause() {
-  isRunning ? pause() : start();
+function toggleTimerState() {
+  isRunning ? pauseTimer() : startTimer();
 }
 
-function start() {
+function startTimer() {
   isRunning = true;
   controlButton.innerText = "Pausar";
-  timer = setInterval(updateTimer, 1000);
+  timerInterval = setInterval(updateTimer, 1000);
   timeContainerElement.classList.remove("rotateIn");
 }
 
-function pause() {
+function pauseTimer() {
   isRunning = false;
   controlButton.innerText = "Iniciar";
-  clearInterval(timer);
+  clearInterval(timerInterval);
 }
 
-function reset() {
-  pause();
-  startValues();
-  drawTime();
-  drawTurn();
+function resetTimer() {
+  pauseTimer();
+  initializeTimerSettings();
+  updateDisplayTime();
+  updateDisplayTurn();
   runAnimation("rotateIn");
   document.querySelector(".config-message").style.display = "none";
 }
@@ -81,16 +80,16 @@ function updateTimer() {
   if (timeRemaining > 0) {
     timeRemaining--;
   } else {
-    finishTurn();
+    completeTurn();
   }
-  drawTime();
+  updateDisplayTime();
 }
 
-function finishTurn() {
+function completeTurn() {
   notificationSound.play();
   runAnimation("swing");
-  nextTurn();
-  drawTurn();
+  switchToNextTurn();
+  updateDisplayTurn();
 }
 
 function runAnimation(animation) {
@@ -100,7 +99,7 @@ function runAnimation(animation) {
   });
 }
 
-function nextTurn() {
+function switchToNextTurn() {
   isBreakTime = !isBreakTime;
   if (!isBreakTime) {
     currentTurn++;
@@ -109,52 +108,34 @@ function nextTurn() {
   if (currentTurn <= totalTurns) {
     if (isBreakTime) {
       totalTime = currentTurn < totalTurns ? breakTime : longBreakTime;
-      showNotification(
-        "Hora de descansar",
-        "Parabéns pelo trabalho, aproveite os próximos minutos para descansar"
-      );
+      showNotification("Hora de descansar", "Parabéns pelo trabalho, aproveite os próximos minutos para descansar");
     } else {
       totalTime = workTime;
-      showNotification(
-        "Voltar ao trabalho",
-        "Você está quase lá, só mais alguns minutos de trabalho"
-      );
+      showNotification("Voltar ao trabalho", "Você está quase lá, só mais alguns minutos de trabalho");
     }
     timeRemaining = totalTime;
   } else {
-    reset();
+    resetTimer();
   }
 }
 
-function drawTime() {
-  const minutes = Math.floor(timeRemaining / 60)
-    .toString()
-    .padStart(2, "0");
-  const seconds = Math.floor(timeRemaining % 60)
-    .toString()
-    .padStart(2, "0");
-
+function updateDisplayTime() {
+  const minutes = Math.floor(timeRemaining / 60).toString().padStart(2, "0");
+  const seconds = Math.floor(timeRemaining % 60).toString().padStart(2, "0");
   timeElement.innerText = `${minutes}:${seconds}`;
-  setCirclePercent((timeRemaining / totalTime) * 100);
+  updateCircleProgress((timeRemaining / totalTime) * 100);
 }
 
-function drawTurn() {
-  let timeMode = "Trabalho";
-  if (isBreakTime) {
-    timeMode = currentTurn < totalTurns ? "Descanso" : "Descanso Longo";
-  }
+function updateDisplayTurn() {
+  let timeMode = isBreakTime ? (currentTurn < totalTurns ? "Descanso" : "Descanso Longo") : "Trabalho";
   timeModeElement.innerText = timeMode;
   turnElement.innerText = `${currentTurn}/${totalTurns}`;
 }
 
-function setCirclePercent(percent) {
+function updateCircleProgress(percent) {
   const circlePerimeter = 597;
   const dashOffset = circlePerimeter * (percent / 100);
-
-  circleElement.style.setProperty(
-    "--dash-offset",
-    circlePerimeter - dashOffset
-  );
+  circleElement.style.setProperty("--dash-offset", circlePerimeter - dashOffset);
 }
 
 function showNotification(messageHeader, messageBody) {
@@ -162,11 +143,7 @@ function showNotification(messageHeader, messageBody) {
   setTimeout(notification.close.bind(notification), 4000);
 }
 
-function showResetMessage() {
-  document.querySelector(".config-message").style.display = "inline";
-}
-
-reset();
+resetTimer();
 
 $(document).ready(function () {
   $(".menu-button").click(function () {
